@@ -28,17 +28,22 @@
     @media (max-width:600px) { .result-img { width:96px; height:96px; } }
   </style>
 
-  <!-- ✅ 방문자 수 카운터 추가 (CountAPI) -->
+  <!-- ✅ 방문자 수 카운터 (counterapi.dev 사용) -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const namespace = "overclock-simulator"; // 프로젝트명
       const key = "page-views";                // 카운터 이름
       const counter = document.getElementById("visit-counter");
 
-      fetch(`https://api.countapi.xyz/hit/${namespace}/${key}`)
+      // counterapi.dev API 사용
+      fetch(`https://api.counterapi.dev/v1/${namespace}/${key}/up`)
         .then(res => res.json())
         .then(data => {
-          if (counter) counter.textContent = data.value.toLocaleString();
+          if (counter && data && typeof data.count === "number") {
+            counter.textContent = data.count.toLocaleString();
+          } else {
+            counter.textContent = "N/A";
+          }
         })
         .catch(() => {
           if (counter) counter.textContent = "N/A";
@@ -60,7 +65,7 @@
 
   <script type="text/babel">
     const { useState } = React;
-    // ... (원본 JS 코드 전부 동일, 생략 없이 아래 그대로 유지)
+
     const displayStage = (stage, withStyle=false) => {
       const map = {9: "9", 10: "오버클럭", 11:"Ⅰ", 12:"Ⅱ", 13:"Ⅲ", 14:"Ⅳ", 15:"Ⅴ"};
       const label = map[stage] || stage.toString();
@@ -216,7 +221,7 @@
               {displayStage(stage, true)}단계 {completed && '(최대 강화 완료)'}
             </div>
             <div className="small" style={{marginTop:6}}>
-              기본 확률: {baseChance}% | 추가 확률: {currentPity}% | 총 확률: {totalChance.toFixed(2)}%
+              기본 확률: {stages[stage]}% | 추가 확률: {pityMap[stage]}% | 총 확률: {Math.min(stages[stage] + pityMap[stage],100).toFixed(2)}%
             </div>
 
             {resultImage && (
