@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>오버클럭 시뮬레이터 (치이콘 완전판)</title>
+  <title>오버클럭 시뮬레이터 (치이콘 완전판 + 사용자 확률 조정)</title>
   <style>
     body { font-family: Inter, Arial, sans-serif; background:#f3f4f6; color:#111827; margin:0; padding:20px; }
     .container { max-width:980px; margin:0 auto; background:#fff; border-radius:12px; padding:20px; box-shadow:0 6px 18px rgba(15,23,42,0.08); }
@@ -25,56 +25,29 @@
     @keyframes popIn { 0% { opacity:0; transform: scale(.8) rotate(-6deg); filter: blur(4px); } 60% { opacity:1; transform: scale(1.06) rotate(3deg); filter: blur(0px); } 100% { opacity:1; transform: scale(1) rotate(0deg); filter: blur(0px); } }
     .result-success { color:#16a34a; }
     .result-fail { color:#dc2626; }
+    input[type=number] { width:60px; padding:4px; border:1px solid #ccc; border-radius:6px; }
     @media (max-width:600px) { .result-img { width:96px; height:96px; } }
   </style>
-
-  <!-- ✅ 방문자 수 카운터 (counterapi.dev 사용) -->
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const namespace = "overclock-simulator"; // 프로젝트명
-      const key = "page-views";                // 카운터 이름
-      const counter = document.getElementById("visit-counter");
-
-      // counterapi.dev API 사용
-      fetch(`https://api.counterapi.dev/v1/${namespace}/${key}/up`)
-        .then(res => res.json())
-        .then(data => {
-          if (counter && data && typeof data.count === "number") {
-            counter.textContent = data.count.toLocaleString();
-          } else {
-            counter.textContent = "N/A";
-          }
-        })
-        .catch(() => {
-          if (counter) counter.textContent = "N/A";
-        });
-    });
-  </script>
-
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
   <div class="container" id="root"></div>
 
-  <!-- ✅ 방문자 수 표시 영역 -->
-  <div style="text-align:center;margin-top:10px;font-size:13px;color:#6b7280;">
-    방문자 수: <span id="visit-counter">loading...</span> 명
-  </div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel">
     const { useState } = React;
 
     const displayStage = (stage, withStyle=false) => {
-      const map = {9: "9", 10: "오버클럭", 11:"Ⅰ", 12:"Ⅱ", 13:"Ⅲ", 14:"Ⅳ", 15:"Ⅴ"};
+      const map = {9:"9",10:"오버클럭",11:"Ⅰ",12:"Ⅱ",13:"Ⅲ",14:"Ⅳ",15:"Ⅴ"};
       const label = map[stage] || stage.toString();
       if (withStyle && stage === 10) return <span className="overclock-text">{label}</span>;
       return label;
     };
 
     function OverclockStageSimulator() {
-      const stages = {9:40, 10:35, 11:20, 12:18, 13:15, 14:10, 15:0};
+      const stages = {9:40,10:35,11:20,12:18,13:15,14:10,15:0};
       const pityIncrement = 5;
       const baseStart = 9;
 
@@ -91,12 +64,13 @@
       const [resultImage, setResultImage] = useState(null);
       const [resultLabel, setResultLabel] = useState("");
       const [resultClass, setResultClass] = useState("");
+      const [customPity, setCustomPity] = useState({9:0,10:0,11:0,12:0,13:0,14:0,15:0});
 
       const baseChance = stages[stage] ?? 0;
       const currentPity = pityMap[stage] ?? 0;
       const totalChance = Math.min(baseChance + currentPity, 100);
 
-      function showResult(success, isMax = false) {
+      function showResult(success, isMax=false) {
         if (isMax) {
           setResultImage(maxImage);
           setResultLabel("축하해 🎉 Ⅴ단계 달성!");
@@ -128,9 +102,7 @@
             nextStage = 15;
             showResult(true, true);
             setCompleted(true);
-          } else {
-            showResult(true);
-          }
+          } else showResult(true);
         } else {
           newPityMap[stage] = Math.min((newPityMap[stage] ?? 0) + pityIncrement, 100);
           nextStage = baseStart;
@@ -141,53 +113,9 @@
         const newAttempt = { attempt: attemptCount + 1, stage: displayStage(stage), chance: totalChance.toFixed(2), roll: roll.toFixed(2), result: resultText };
 
         setAttemptCount(c => c + 1);
-        setAttemptLog(l => [newAttempt, ...l].slice(0, 200));
+        setAttemptLog(l => [newAttempt, ...l].slice(0,200));
         setPityMap(newPityMap);
         setStage(nextStage);
-      }
-
-      function autoUntilMax() {
-        if (completed) return;
-        let safety = 20000;
-        let s = stage;
-        let pitys = {...pityMap};
-        let count = attemptCount;
-        const logs = [];
-        let lastSuccess = null;
-
-        while (s < 15 && safety-- > 0) {
-          const base = stages[s] ?? 0;
-          const pity = pitys[s] ?? 0;
-          const chance = Math.min(base + pity, 100);
-          const roll = Math.random() * 100;
-          const success = roll < chance;
-          count++;
-          const resultText = success ? "성공" : "오버클럭에 실패해 멜트다운 상태가 되었습니다 (단계 초기화)";
-          logs.push({ attempt: count, stage: displayStage(s), chance: chance.toFixed(2), roll: roll.toFixed(2), result: resultText });
-
-          if (success) {
-            pitys[s] = 0;
-            s++;
-            lastSuccess = true;
-          } else {
-            pitys[s] = Math.min((pitys[s] ?? 0) + pityIncrement, 100);
-            s = baseStart;
-            lastSuccess = false;
-          }
-          if (s >= 15) break;
-        }
-
-        if (s >= 15) {
-          setCompleted(true);
-          showResult(true, true);
-        } else {
-          showResult(lastSuccess);
-        }
-
-        setStage(s >= 15 ? 15 : s);
-        setPityMap(pitys);
-        setAttemptCount(count);
-        setAttemptLog(l => [...logs.reverse(), ...l].slice(0, 200));
       }
 
       function reset() {
@@ -201,72 +129,83 @@
         setResultClass("");
       }
 
+      // 사용자 지정 확률 반영
+      function applyCustomPity() {
+        setPityMap(prev => {
+          const updated = {...prev};
+          Object.keys(customPity).forEach(k=>{
+            updated[k] = Math.min(Math.max(Number(customPity[k]) || 0, 0), 100);
+          });
+          return updated;
+        });
+      }
+
       return (
         <div>
-          <h1>오버클럭(강화) 시뮬레이터 — 치이콘 완전판</h1>
+          <h1>오버클럭(강화) 시뮬레이터 — 사용자 확률 조정판</h1>
 
           <section>
             <div className="small">시작할 단계를 선택하세요</div>
-            <select value={startStage} onChange={e => setStartStage(Number(e.target.value))} style={{padding:"6px 10px", borderRadius:"6px", border:"1px solid #ccc", marginRight:"8px"}} >
-              {Object.keys(stages).map(s => (
+            <select value={startStage} onChange={e=>setStartStage(Number(e.target.value))} style={{padding:"6px 10px",borderRadius:"6px",border:"1px solid #ccc",marginRight:"8px"}}>
+              {Object.keys(stages).map(s=>(
                 <option key={s} value={s}>{displayStage(Number(s))}</option>
               ))}
             </select>
-            <button className="btn-blue" onClick={() => { reset(); setStage(startStage); }}>시작하기</button>
+            <button className="btn-blue" onClick={()=>{reset(); setStage(startStage);}}>시작하기</button>
           </section>
 
           <section style={{textAlign:'center'}}>
             <div className="small">현재 단계</div>
             <div style={{fontSize:24,fontWeight:700}}>
-              {displayStage(stage, true)}단계 {completed && '(최대 강화 완료)'}
+              {displayStage(stage,true)}단계 {completed && '(최대 강화 완료)'}
             </div>
             <div className="small" style={{marginTop:6}}>
-              기본 확률: {stages[stage]}% | 추가 확률: {pityMap[stage]}% | 총 확률: {Math.min(stages[stage] + pityMap[stage],100).toFixed(2)}%
+              기본 확률: {stages[stage]}% | 추가 확률: {pityMap[stage]}% | 총 확률: {Math.min(stages[stage]+pityMap[stage],100).toFixed(2)}%
             </div>
 
             {resultImage && (
-              <div className="result-card" aria-live="polite">
-                <img className="result-img" src={resultImage} alt={resultLabel} />
+              <div className="result-card">
+                <img className="result-img" src={resultImage} alt={resultLabel}/>
                 <div className={`result-caption ${resultClass}`}>{resultLabel}</div>
-              </div>
-            )}
-
-            {completed && (
-              <div style={{ marginTop:20, fontSize:28, fontWeight:700, fontFamily:'Impact, Arial Black, sans-serif', background:'linear-gradient(90deg, gold, orange, deeppink, violet)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', textShadow:'0 0 6px rgba(255,215,0,0.6)' }}>
-                🎉 축하합니다! Ⅴ단계를 성공하셨습니다! 🎉
               </div>
             )}
           </section>
 
           <section>
             <h3 className="small" style={{marginBottom:6}}>📊 단계별 누적 확률표</h3>
-            <table style={{width:"100%", borderCollapse:"collapse", fontSize:13}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
               <thead>
                 <tr style={{background:"#f1f5f9"}}>
-                  <th style={{padding:"6px", border:"1px solid #e5e7eb"}}>단계</th>
-                  <th style={{padding:"6px", border:"1px solid #e5e7eb"}}>기본 확률</th>
-                  <th style={{padding:"6px", border:"1px solid #e5e7eb"}}>누적 추가 확률</th>
-                  <th style={{padding:"6px", border:"1px solid #e5e7eb"}}>총 확률</th>
+                  <th style={{padding:"6px",border:"1px solid #e5e7eb"}}>단계</th>
+                  <th style={{padding:"6px",border:"1px solid #e5e7eb"}}>기본 확률</th>
+                  <th style={{padding:"6px",border:"1px solid #e5e7eb"}}>누적 추가 확률</th>
+                  <th style={{padding:"6px",border:"1px solid #e5e7eb"}}>사용자 지정(%)</th>
+                  <th style={{padding:"6px",border:"1px solid #e5e7eb"}}>총 확률</th>
                 </tr>
               </thead>
               <tbody>
-                {Object.keys(stages).map(s => (
-                  <tr key={s} style={{background: Number(s)===stage ? "#e0f2fe" : "white"}}>
-                    <td style={{padding:"6px", border:"1px solid #e5e7eb", fontWeight:600}}>
-                      {Number(s) === 10 ? <span className="overclock-text">{displayStage(Number(s))}</span> : displayStage(Number(s))}
+                {Object.keys(stages).map(s=>(
+                  <tr key={s} style={{background:Number(s)===stage ? "#e0f2fe" : "white"}}>
+                    <td style={{padding:"6px",border:"1px solid #e5e7eb",fontWeight:600}}>
+                      {Number(s)===10 ? <span className="overclock-text">{displayStage(Number(s))}</span> : displayStage(Number(s))}
                     </td>
-                    <td style={{padding:"6px", border:"1px solid #e5e7eb"}}>{stages[s]}%</td>
-                    <td style={{padding:"6px", border:"1px solid #e5e7eb"}}>{pityMap[s]}%</td>
-                    <td style={{padding:"6px", border:"1px solid #e5e7eb"}}>{Math.min(stages[s] + pityMap[s],100)}%</td>
+                    <td style={{padding:"6px",border:"1px solid #e5e7eb"}}>{stages[s]}%</td>
+                    <td style={{padding:"6px",border:"1px solid #e5e7eb"}}>{pityMap[s]}%</td>
+                    <td style={{padding:"6px",border:"1px solid #e5e7eb"}}>
+                      <input type="number" value={customPity[s]} onChange={e=>setCustomPity({...customPity,[s]:e.target.value})} min="0" max="100"/> 
+                    </td>
+                    <td style={{padding:"6px",border:"1px solid #e5e7eb"}}>{Math.min(stages[s]+pityMap[s],100)}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <div style={{marginTop:"10px",textAlign:"right"}}>
+              <button className="btn-green" onClick={applyCustomPity}>추가 확률 적용</button>
+            </div>
           </section>
 
           <section>
             <button className="btn-blue" onClick={doAttempt} disabled={completed}>한 번 시도</button>
-            <button className="btn-green" onClick={autoUntilMax} disabled={completed}>최대 강화까지 자동</button>
             <button className="btn-outline" onClick={reset}>리셋</button>
             <div style={{marginTop:12}}>
               <div className="small">총 시도 횟수: {attemptCount}</div>
@@ -274,29 +213,27 @@
           </section>
 
           <section>
-            <h3 className="small">최근 시도 (최대 200개)</h3>
+            <h3 className="small">최근 시도 기록</h3>
             <div className="log">
-              {attemptLog.length === 0 && <div className="small">아직 시도 기록이 없습니다.</div>}
-              {attemptLog.map((a, idx) => (
+              {attemptLog.length===0 && <div className="small">아직 시도 기록이 없습니다.</div>}
+              {attemptLog.map((a,idx)=>(
                 <div className="row" key={idx}>
                   <div>#{a.attempt} — {a.stage}단계 | 확률: {a.chance}% (롤: {a.roll})</div>
-                  <div style={{color:a.result.includes("실패")?'#dc2626':'#16a34a',fontWeight:600}}>
-                    {a.result}
-                  </div>
+                  <div style={{color:a.result.includes("실패")?'#dc2626':'#16a34a',fontWeight:600}}>{a.result}</div>
                 </div>
               ))}
             </div>
           </section>
 
           <footer>
-            강화 실패 시 9단계로 완전 초기화되며, 해당 단계의 확률은 +5% 누적됩니다.<br/>
-            성공 시 다음 단계로 이동하며 해당 단계의 누적 확률은 0%로 초기화됩니다.
+            강화 실패 시 9단계로 초기화되며, 해당 단계의 확률은 +5% 누적됩니다.<br/>
+            사용자 입력을 통해 각 단계의 누적 추가 확률을 직접 수정할 수 있습니다.
           </footer>
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<OverclockStageSimulator />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<OverclockStageSimulator/>);
   </script>
 </body>
 </html>
